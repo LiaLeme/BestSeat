@@ -72,16 +72,16 @@ export class NewCourseComponent implements OnInit {
   public lesson: LessonPayload = {
     id: null,
     title: '',
-    contentUrl: '',
+    videoUrl: '',
     description: '',
-    moduleId: 0,
+    courseModuleId: 0,
   }
 
   public alertDialog: Ngxalert = new Ngxalert;
 
   public creationStatusEnum: typeof CreationStatusEnum = CreationStatusEnum;
 
-  public courseCreationStatus: CreationStatusEnum = CreationStatusEnum.UPDATING;
+  public courseCreationStatus: CreationStatusEnum = CreationStatusEnum.NONE;
 
   public lessonCreationStatus: CreationStatusEnum = CreationStatusEnum.NONE;
 
@@ -90,6 +90,8 @@ export class NewCourseComponent implements OnInit {
   public creationRecordTextLocal = creationRecordText;
 
   public creationRecordButtonLocal = creationRecordButton;
+
+  public isValidImage: boolean = false;
 
   //#endregion
 
@@ -107,6 +109,8 @@ export class NewCourseComponent implements OnInit {
       this.isLoadingCourseToEdit = true;
       this.course = await this.courseService.get(courseId) as CoursePayload;
       this.courseCreationStatus = CreationStatusEnum.UPDATING;
+
+      this.toastrService.info('Você entrou no modo de edição de curso!', 'Olá');
     } catch (e: any) {
       this.toastrService.error(e.message, 'Atenção!');
     } finally {
@@ -125,7 +129,7 @@ export class NewCourseComponent implements OnInit {
     this.lesson.id = lesson.id;
     this.lesson.description = lesson.description;
     this.lesson.title = lesson.title;
-    this.lesson.contentUrl = lesson.contentUrl;
+    this.lesson.videoUrl = lesson.videoUrl.toString();
 
     this.lessonCreationStatus = CreationStatusEnum.UPDATING;
   }
@@ -190,6 +194,8 @@ export class NewCourseComponent implements OnInit {
       imageUrl: '',
     }
     this.courseCreationStatus = CreationStatusEnum.CREATING;
+
+    this.toastrService.info(' Você entrou no modo de criação de curso!', 'Olá');
   }
 
   public async deleteModule(moduleId: number | undefined): Promise<void> {
@@ -198,13 +204,16 @@ export class NewCourseComponent implements OnInit {
         return;
 
       this.alertDialog.create({
+        id: 'alert',
         title: 'Deseja remover esse modulo?',
         message: 'Atenção, essa ação não poderá ser desfeita.',
         customCssClass: 'dialog-class',
+        strict: false,
+        type: 'M',
         buttons : [
           {
             title : 'Remover',
-            class: 'dialog-class--default',
+            class: 'dialog-class--cancel',
             event : async () => {
               await this.courseService.deleteModule(moduleId);
               await this.activeModuleCrudAndLoadModulesByCourse();
@@ -213,7 +222,7 @@ export class NewCourseComponent implements OnInit {
           },
           {
             title : 'Cancelar',
-            class: 'dialog-class--cancel',
+            class: 'dialog-class--confirm',
             event : () => {
               this.alertDialog.removeAlert('alert');
             }
@@ -231,13 +240,16 @@ export class NewCourseComponent implements OnInit {
         return;
 
       this.alertDialog.create({
+        id: 'alert',
         title: 'Deseja remover essa aula?',
         message: 'Atenção, essa ação não poderá ser desfeita.',
         customCssClass: 'dialog-class',
+        strict: false,
+        type: 'M',
         buttons : [
           {
             title : 'Remover',
-            class: 'danger-button',
+            class: 'dialog-class--default',
             event : async () => {
               await this.courseService.deleteLesson(lessonId);
               await this.activeLessonCrudAndLoadLessonsByModule();
@@ -246,7 +258,7 @@ export class NewCourseComponent implements OnInit {
           },
           {
             title : 'Cancelar',
-            class: 'primary-button',
+            class: 'dialog-class--cancel',
             event : () => {
               this.alertDialog.removeAlert('alert');
             }
@@ -263,25 +275,30 @@ export class NewCourseComponent implements OnInit {
       if (!courseId)
         return;
 
+      this.alertDialog = new Ngxalert;;
       this.alertDialog.create({
+        id: 'alert',
         title: 'Deseja remover esse curso?',
         message: 'Atenção, essa ação não poderá ser desfeita.',
         customCssClass: 'dialog-class',
+        strict: false,
+        type: 'M',
         buttons : [
           {
             title : 'Remover',
-            class: 'danger-button',
-            event : async () => {
-              await this.courseService.delete(courseId);
-              await this.loadCourses();
-              this.courseCreationStatus = CreationStatusEnum.NONE
-
-              this.alertDialog.removeAlert('alert');
+            class: 'dialog-class--cancel',
+            event : () => {
+              this.courseService.delete(courseId).then(() => {
+                this.loadCourses().then(() => {
+                  this.courseCreationStatus = CreationStatusEnum.NONE;
+                  this.alertDialog.removeAlert('alert');
+                });
+              });
             }
           },
           {
             title : 'Cancelar',
-            class: 'primary-button',
+            class: 'dialog-class--confirm',
             event : () => {
               this.alertDialog.removeAlert('alert');
             }
@@ -302,8 +319,10 @@ export class NewCourseComponent implements OnInit {
       this.checkCourseInformation();
 
       if (this.courseCreationStatus === CreationStatusEnum.CREATING) {
-        this.course.imageUrl = '';
         delete this.course.id;
+
+        if (!this.isValidImage)
+          throw new Error('Imagem invalida!');
 
         const course = await this.courseService.create(this.course);
 
@@ -353,6 +372,12 @@ export class NewCourseComponent implements OnInit {
         this.toastrService.success('Modulo atualizado com sucesso!');
       }
 
+      this.module = {
+        id: null,
+        title: '',
+        courseId: 0
+      }
+
       this.moduleCreationStatus = CreationStatusEnum.NONE;
       await this.activeModuleCrudAndLoadModulesByCourse();
     } catch (e: any) {
@@ -374,17 +399,35 @@ export class NewCourseComponent implements OnInit {
         delete this.lesson.id;
 
         if (this.module.id)
-          this.lesson.moduleId = this.module.id;
+          this.lesson.courseModuleId = this.module.id;
 
         await this.courseService.createLesson(this.lesson);
 
         this.toastrService.success('Aula criada com sucesso!');
+        this.lessonCreationStatus = CreationStatusEnum.NONE;
+
+        this.lesson = {
+          id: null,
+          title: '',
+          description: '',
+          videoUrl: '',
+          courseModuleId: 0
+        }
       }
 
       if (this.lessonCreationStatus === CreationStatusEnum.UPDATING && this.lesson.id) {
         await this.courseService.updateLesson(this.lesson.id, this.lesson);
 
-        this.toastrService.success('Aula atualizado com sucesso!');
+        this.lesson = {
+          id: null,
+          title: '',
+          description: '',
+          videoUrl: '',
+          courseModuleId: 0
+        }
+
+        this.toastrService.success('Aula atualizada com sucesso!');
+        this.lessonCreationStatus = CreationStatusEnum.NONE;
       }
 
       this.moduleCreationStatus = CreationStatusEnum.NONE;
@@ -410,8 +453,8 @@ export class NewCourseComponent implements OnInit {
       id: null,
       title: '',
       description: '',
-      contentUrl: '',
-      moduleId: 0,
+      videoUrl: '',
+      courseModuleId: 0,
     }
     this.lessonCreationStatus = CreationStatusEnum.NONE;
   }
@@ -434,8 +477,8 @@ export class NewCourseComponent implements OnInit {
       id: null,
       title: '',
       description: '',
-      contentUrl: '',
-      moduleId: 0,
+      videoUrl: '',
+      courseModuleId: 0,
     }
     this.lessonCreationStatus = CreationStatusEnum.NONE;
   }
@@ -463,7 +506,7 @@ export class NewCourseComponent implements OnInit {
     if (this.lesson.title?.length === 0)
       throw new Error('É necessário definir o titulo da aula.');
 
-    if (this.lesson.contentUrl?.length === 0)
+    if (this.lesson.videoUrl?.length === 0)
       throw new Error('É necessário definir o URL da aula.');
 
     if (this.lesson.description?.length === 0)

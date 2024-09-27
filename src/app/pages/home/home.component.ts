@@ -1,6 +1,7 @@
 //#region Imports
 
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Router } from '@angular/router';
 import { ToastrService } from 'ngx-toastr';
 import { Subscription } from 'rxjs';
 import { CourseProxy } from '../../models/proxies/course.proxy';
@@ -19,6 +20,7 @@ export class HomeComponent implements OnDestroy, OnInit {
   //#region Constructors
 
   constructor(
+    private readonly router: Router,
     private readonly userService: UserService,
     private readonly courseService: CourseService,
     private readonly toastrService: ToastrService,
@@ -49,12 +51,7 @@ export class HomeComponent implements OnDestroy, OnInit {
 
   public user: UserProxy | undefined = undefined;
 
-  public highlightedCourse: CourseProxy = {
-    name: '',
-    description: '',
-    category: '',
-    imageUrl: '',
-  };
+  public highlightedCourse: CourseProxy | null = null;
 
   public searchContent: string = '';
 
@@ -101,6 +98,16 @@ export class HomeComponent implements OnDestroy, OnInit {
     await this.loadCourses();
   }
 
+  public async goToCourse(courseId: number | undefined): Promise<void> {
+    if (!this.isLogged) {
+      this.toastrService.info('É necessário estar logado para acessar um curso', 'Olá, bem vindo');
+      return;
+    }
+
+    if (courseId)
+      await this.router.navigateByUrl('/course/' + courseId.toString());
+  }
+
   public async loadCourses(page?: number, limit?: number): Promise<void> {
     try {
       this.isLoadingCourses = true;
@@ -109,11 +116,11 @@ export class HomeComponent implements OnDestroy, OnInit {
       if (this.activatedCategoryIndex)
         categoryFilter = this.categoryList[this.activatedCategoryIndex];
 
-      const courses = await this.courseService.list(this.searchContent, categoryFilter, page, limit);
+      const courses = await this.courseService.list(this.searchContent, categoryFilter);
 
       this.courseList = courses ? courses : [];
 
-      if (this.courseList.length !== 0)
+      if (this.courseList.length !== 0 && !this.highlightedCourse)
         this.highlightedCourse = this.courseList[0];
     } catch (e: any) {
       this.toastrService.error(e.message, 'Atenção!');

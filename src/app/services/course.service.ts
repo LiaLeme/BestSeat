@@ -8,6 +8,8 @@ import { ModulePayload } from '../models/payloads/module.payload';
 import { CourseModuleProxy } from '../models/proxies/course-module.proxy';
 import { CourseProxy } from '../models/proxies/course.proxy';
 import { LessonProxy } from '../models/proxies/lesson.proxy';
+import { UserCourseProxy } from '../models/proxies/user-course.proxy';
+import { StorageService } from './storage.service';
 
 //#endregion
 
@@ -19,6 +21,7 @@ export class CourseService {
   //#region Constructors
 
   constructor(
+    private readonly storageService: StorageService,
     private readonly interactor: CourseInteractor,
   ) {}
 
@@ -26,8 +29,8 @@ export class CourseService {
 
   //#region Public Methods
 
-  public async list(name?: string, category?: string, page?: number, limit?: number): Promise<CourseProxy[] | undefined> {
-    return await this.interactor.list(name, category, page, limit);
+  public async list(name?: string, category?: string): Promise<CourseProxy[] | undefined> {
+    return await this.interactor.list(name, category);
   }
 
   public async get(id: number): Promise<CourseProxy | undefined> {
@@ -83,7 +86,49 @@ export class CourseService {
   }
 
   public async getLessonByModule(moduleId: number): Promise<LessonProxy[] | undefined> {
-    return await this.interactor.getLessonByModule(moduleId);
+    let lessons = await this.interactor.getLessonByModule(moduleId);
+
+    lessons = lessons?.filter(x => x.courseModuleId === moduleId)
+
+    return lessons;
+  }
+
+  public saveFavorite(courseId: number): void {
+    const favorites: number[] = this.storageService.getItem<number[]>('FAVORITES').success || [];
+
+    const indexToRemove = favorites.findIndex(x => x === courseId);
+
+    if (indexToRemove !== -1)
+      return;
+
+    favorites.push(courseId);
+
+    this.storageService.setItem<number[]>('FAVORITES', favorites);
+  }
+
+  public removeFavorite(courseId: number): void {
+    const favorites: number[] = this.storageService.getItem<number[]>('FAVORITES').success || [];
+
+    const indexToRemove = favorites.findIndex(x => x === courseId);
+
+    if (indexToRemove === -1)
+      return;
+
+    favorites.splice(indexToRemove, 1);
+
+    this.storageService.setItem<number[]>('FAVORITES', favorites);
+  }
+
+  public getFavorites(): number[] {
+    return this.storageService.getItem<number[]>('FAVORITES').success || [];
+  }
+
+  public async registerCourse(courseId: number, userId: number): Promise<void> {
+    return await this.interactor.registerCourse(courseId, userId);
+  }
+
+  public async getRegisters(userId: number): Promise<UserCourseProxy[] | undefined> {
+    return await this.interactor.getRegisters(userId);
   }
 
   //#endregion
